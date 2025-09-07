@@ -753,8 +753,11 @@
         <button class="button" onclick="openHelpModal()">
             <i class="fas fa-question-circle"></i> Como Usar
         </button>
-        <button class="button" id="loadButton" onclick="fetchAllDiaDeSorteResults()">
-            <i class="fas fa-sync-alt"></i> Carregar Resultados Reais
+        <button class="button" id="loadButton" onclick="toggleCarregamento()" style="display: none;">
+            <i class="fas fa-times"></i> Cancelar Carregamento
+        </button>
+        <button class="button" id="reloadButton" onclick="recarregarDados()" style="display: none;">
+            <i class="fas fa-sync-alt"></i> Recarregar Dados
         </button>
     </div>
 
@@ -1629,24 +1632,36 @@ async function fetchAllDiaDeSorteResults() {
     const completedMessage = document.getElementById('completedMessage');
     const errorMessage = document.getElementById('errorMessage');
     const warningMessage = document.getElementById('warningMessage');
-    const loadButton = document.getElementById('loadButton');
     const tableBody = document.getElementById('diaDeSorteResults').getElementsByTagName('tbody')[0];
 
     isLoading = true;
+    cancelarCarregamento = false;
     loadingMessage.style.display = 'flex';
     completedMessage.style.display = 'none';
     errorMessage.style.display = 'none';
     warningMessage.style.display = 'none';
-    loadButton.disabled = true;
     tableBody.innerHTML = '';
     allResults = [];
     currentPage = 1;
 
+    // Atualizar estado dos botões
+    updateButtonStates();
+
     try {
         console.log('Iniciando busca completa de TODOS os resultados do Dia de Sorte...');
         
+        if (cancelarCarregamento) {
+            console.log('Carregamento cancelado durante descoberta do último concurso');
+            return;
+        }
+        
         const ultimoConcurso = await descobrirUltimoConcurso();
         console.log(`Último concurso encontrado: ${ultimoConcurso}`);
+        
+        if (cancelarCarregamento) {
+            console.log('Carregamento cancelado após descobrir último concurso');
+            return;
+        }
         
         const primeiroConcurso = 1;
         const totalConcursos = ultimoConcurso - primeiroConcurso + 1;
@@ -1655,6 +1670,11 @@ async function fetchAllDiaDeSorteResults() {
         
         await buscarTodosConcursos(primeiroConcurso, ultimoConcurso);
         
+        if (cancelarCarregamento) {
+            console.log('Carregamento cancelado durante busca dos concursos');
+            return;
+        }
+        
         setupPagination();
         renderCurrentPage();
         showConcursoInfo(allResults);
@@ -1662,13 +1682,19 @@ async function fetchAllDiaDeSorteResults() {
         completedMessage.style.display = 'flex';
         console.log(`Carregamento concluído! Total de resultados: ${allResults.length}`);
         
+        showNotification(`✅ ${allResults.length} concursos carregados com sucesso!`, 'success');
+        
     } catch (error) {
         console.error('Erro durante o carregamento completo:', error);
-        showError(`Erro ao carregar todos os resultados: ${error.message}`);
+        if (!cancelarCarregamento) {
+            showError(`Erro ao carregar todos os resultados: ${error.message}`);
+        }
     } finally {
-        isLoading = false;
-        loadingMessage.style.display = 'none';
-        loadButton.disabled = false;
+        if (!cancelarCarregamento) {
+            isLoading = false;
+            loadingMessage.style.display = 'none';
+            updateButtonStates();
+        }
     }
 }
 
@@ -1764,11 +1790,17 @@ async function buscarTodosConcursos(inicio, fim) {
     const DELAY_ENTRE_LOTES = 1000;
     
     for (let loteInicio = inicio; loteInicio <= fim; loteInicio += LOTE_SIZE) {
+        // Verificar cancelamento no início de cada lote
+        if (cancelarCarregamento) {
+            console.log('Carregamento cancelado durante processamento dos lotes');
+            return;
+        }
+        
         const loteFim = Math.min(loteInicio + LOTE_SIZE - 1, fim);
         
         console.log(`Buscando lote: concursos ${loteInicio} a ${loteFim}`);
         
-        updateLoadingMessage(`Carregando concursos ${loteInicio}-${loteFim} de ${fim}...`);
+        updateLoadingMessage(`Carregando concursos ${loteInicio}-${loteFim} de ${fim}... (Clique em "Cancelar" para parar)`);
         
         const promises = [];
         for (let concurso = loteInicio; concurso <= loteFim; concurso++) {
@@ -1776,6 +1808,12 @@ async function buscarTodosConcursos(inicio, fim) {
         }
         
         const resultados = await Promise.allSettled(promises);
+        
+        // Verificar cancelamento após o processamento
+        if (cancelarCarregamento) {
+            console.log('Carregamento cancelado após processamento de lote');
+            return;
+        }
         
         resultados.forEach((resultado, index) => {
             if (resultado.status === 'fulfilled' && resultado.value) {
@@ -1788,9 +1826,21 @@ async function buscarTodosConcursos(inicio, fim) {
         
         console.log(`Lote processado. Total de resultados até agora: ${allResults.length}`);
         
+        // Verificar cancelamento antes do delay
+        if (cancelarCarregamento) {
+            console.log('Carregamento cancelado antes do delay');
+            return;
+        }
+        
         if (loteFim < fim) {
             await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_LOTES));
         }
+    }
+    
+    // Verificação final antes de finalizar
+    if (cancelarCarregamento) {
+        console.log('Carregamento cancelado antes da finalização');
+        return;
     }
     
     allResults.sort((a, b) => parseInt(b.concurso) - parseInt(a.concurso));
@@ -2445,6 +2495,66 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
+// =================== FUNÇÕES DE CONTROLE DE CARREGAMENTO ===================
+
+let cancelarCarregamento = false;
+
+function toggleCarregamento() {
+    if (isLoading) {
+        // Cancelar carregamento
+        cancelarCarregamento = true;
+        showNotification('🛑 Carregamento cancelado pelo usuário', 'info');
+        console.log('Carregamento cancelado pelo usuário');
+        
+        // Reset UI
+        resetLoadingState();
+    }
+}
+
+function recarregarDados() {
+    // Reset estado e iniciar novo carregamento
+    cancelarCarregamento = false;
+    fetchAllDiaDeSorteResults();
+}
+
+function resetLoadingState() {
+    isLoading = false;
+    cancelarCarregamento = false;
+    
+    const loadingMessage = document.getElementById('loadingMessage');
+    const loadButton = document.getElementById('loadButton');
+    const reloadButton = document.getElementById('reloadButton');
+    
+    loadingMessage.style.display = 'none';
+    loadButton.style.display = 'none';
+    reloadButton.style.display = 'inline-block';
+}
+
+function updateButtonStates() {
+    const loadButton = document.getElementById('loadButton');
+    const reloadButton = document.getElementById('reloadButton');
+    
+    if (isLoading) {
+        loadButton.style.display = 'inline-block';
+        loadButton.disabled = false;
+        reloadButton.style.display = 'none';
+    } else {
+        loadButton.style.display = 'none';
+        reloadButton.style.display = allResults.length > 0 ? 'inline-block' : 'none';
+    }
+}
+
+function iniciarCarregamentoAutomatico() {
+    console.log('🚀 Iniciando carregamento automático dos dados...');
+    
+    // Aguardar um pequeno delay para garantir que a UI está pronta
+    setTimeout(() => {
+        if (!isLoading && allResults.length === 0) {
+            fetchAllDiaDeSorteResults();
+        }
+    }, 1000);
+}
+
 // Inicialização
 window.addEventListener('load', () => {
     console.log('Aplicação do Dia de Sorte carregada com ajustes personalizáveis.');
@@ -2463,6 +2573,9 @@ window.addEventListener('load', () => {
             document.documentElement.classList.remove('dark');
         }
     });
+    
+    // Iniciar carregamento automático
+    iniciarCarregamentoAutomatico();
 });
 </script>
 
