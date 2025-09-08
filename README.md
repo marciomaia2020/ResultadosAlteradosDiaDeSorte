@@ -112,3 +112,6 @@ Entende o fluxo recomendado
 Clica "Entendi, Vamos Começar!" → Modal fecha
 O modal está perfeitamente integrado à aplicação e mantém todo o design e funcionalidades originais! 
 🎯✨
+
+
+
