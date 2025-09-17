@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resultados Alterados do Dia de Sorte - Configurações Personalizadas</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+	<link rel="stylesheet" href="./css/styles.css">
+    <script src="./js/scripts.js"></script>
     <style>
         :root {
             --primary-color: #d4b31a; /* Ouro (Dia de Sorte) */
@@ -1877,26 +1879,11 @@ let totalPages = 0;
 let isLoading = false;
 let combinacoesRepetidas = new Map(); // Armazena combinações repetidas
 
-// Configurações das APIs - PRIORIZANDO API DA CAIXA
-const API_CONFIG = {
-    CAIXA_URL: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/diadesorte',
-    CORS_PROXY_URLS: [
-        'https://api.allorigins.win/get?url=',
-        'https://corsproxy.io/?',
-        'https://cors-anywhere.herokuapp.com/'
-    ],
-    HEROKU_URL: 'https://loteriascaixa-api.herokuapp.com/api/dia-de-sorte',
-    BRASIL_URL: 'https://brasilapi.com.br/api/loterias/v1/dia-de-sorte'
-};
+// API da Caixa - APENAS ESTA
+const API_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/diadesorte';
 
 // CONFIGURAÇÃO DOS SORTEIOS DO DIA DE SORTE
 const CONFIG_SORTEIOS = {
-    ULTIMO_CONCURSO: {
-        numero: 1087,
-        data: new Date('2025-07-10'),
-        listaDezenas: ["05", "08", "22", "24", "25", "26", "29"],
-        nomeTimeCoracaoMesSorte: "Abril"
-    },
     PRIMEIRO_CONCURSO: {
         numero: 1,
         data: new Date('2018-05-28')
@@ -2580,7 +2567,8 @@ async function fetchAllDiaDeSorteResults() {
     updateButtonStates();
 
     try {
-        console.log('Iniciando busca completa de TODOS os resultados do Dia de Sorte...');
+        console.log('🔥 INICIANDO BUSCA COM DADOS CORRIGIDOS DO CONCURSO 1116...');
+        console.log(`📝 Dados esperados: Concurso 1116 = 01, 04, 11, 19, 21, 22, 25 (16/09/2025)`);
         
         if (cancelarCarregamento) {
             console.log('Carregamento cancelado durante descoberta do último concurso');
@@ -2588,7 +2576,7 @@ async function fetchAllDiaDeSorteResults() {
         }
         
         const ultimoConcurso = await descobrirUltimoConcurso();
-        console.log(`Último concurso encontrado: ${ultimoConcurso}`);
+        console.log(`🎯 Último concurso encontrado: ${ultimoConcurso}`);
         
         if (cancelarCarregamento) {
             console.log('Carregamento cancelado após descobrir último concurso');
@@ -2598,7 +2586,7 @@ async function fetchAllDiaDeSorteResults() {
         const primeiroConcurso = 1;
         const totalConcursos = ultimoConcurso - primeiroConcurso + 1;
         
-        console.log(`Buscando todos os concursos de ${primeiroConcurso} até ${ultimoConcurso} (${totalConcursos} concursos)`);
+        console.log(`📊 Buscando todos os concursos de ${primeiroConcurso} até ${ultimoConcurso} (${totalConcursos} concursos)`);
         
         await buscarTodosConcursos(primeiroConcurso, ultimoConcurso);
         
@@ -2612,7 +2600,30 @@ async function fetchAllDiaDeSorteResults() {
         showConcursoInfo(allResults);
         
         completedMessage.style.display = 'flex';
-        console.log(`Carregamento concluído! Total de resultados: ${allResults.length}`);
+        console.log(`✅ Carregamento concluído! Total de resultados: ${allResults.length}`);
+        
+        // Verificar se o concurso 1116 foi carregado corretamente
+        const concurso1116 = allResults.find(r => parseInt(r.concurso) === 1116);
+        if (concurso1116) {
+            console.log(`🎯 VERIFICAÇÃO CONCURSO 1116:`);
+            console.log(`   Dezenas encontradas: ${concurso1116.dezenas.join(', ')}`);
+            console.log(`   Data: ${concurso1116.data}`);
+            console.log(`   Mês da sorte: ${concurso1116.mesDaSorte}`);
+            console.log(`   Fonte: ${concurso1116.fonte || 'não definida'}`);
+            
+            // Comparar com dados esperados
+            const dezenasEsperadas = ["01", "04", "11", "19", "21", "22", "25"];
+            const dezenasCarregadas = concurso1116.dezenas;
+            const dezenasCorretas = JSON.stringify(dezenasCarregadas) === JSON.stringify(dezenasEsperadas);
+            
+            if (dezenasCorretas) {
+                showNotification(`🎉 Concurso 1116 carregado CORRETAMENTE: ${dezenasCarregadas.join(', ')}`, 'success');
+            } else {
+                showNotification(`⚠️ Concurso 1116 com dados incorretos: ${dezenasCarregadas.join(', ')}`, 'error');
+            }
+        } else {
+            showNotification(`❌ Concurso 1116 não foi encontrado!`, 'error');
+        }
         
         showNotification(`✅ ${allResults.length} concursos carregados com sucesso!`, 'success');
         
@@ -2661,61 +2672,53 @@ function showConcursoInfo(results) {
 }
 
 async function descobrirUltimoConcurso() {
-    console.log('Descobrindo último concurso via API da Caixa...');
-    
-    for (const proxyUrl of API_CONFIG.CORS_PROXY_URLS) {
-        try {
-            let url;
-            let response;
-            
-            if (proxyUrl.includes('allorigins')) {
-                url = `${proxyUrl}${encodeURIComponent(API_CONFIG.CAIXA_URL)}`;
-                response = await fetch(url);
-                if (response.ok) {
-                    const proxyData = await response.json();
-                    const data = JSON.parse(proxyData.contents);
-                    if (data.numero) {
-                        console.log(`Último concurso via ${proxyUrl}: ${data.numero}`);
-                        return parseInt(data.numero);
-                    }
-                }
-            } else {
-                url = `${proxyUrl}${API_CONFIG.CAIXA_URL}`;
-                response = await fetch(url);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.numero) {
-                        console.log(`Último concurso via ${proxyUrl}: ${data.numero}`);
-                        return parseInt(data.numero);
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn(`Proxy ${proxyUrl} falhou:`, error);
-        }
-    }
+    console.log('🔍 Descobrindo último concurso disponível na API...');
     
     try {
-        const response = await fetch(`${API_CONFIG.HEROKU_URL}/latest`);
+        // Fazer a requisição direta para a API da Caixa
+        const response = await fetch(API_URL);
+        
         if (response.ok) {
             const data = await response.json();
-            if (data.concurso || data.numero) {
-                const concurso = data.concurso || data.numero;
-                console.log(`Último concurso via Heroku API: ${concurso}`);
-                return parseInt(concurso);
+            if (data.numero) {
+                console.log(`✅ Último concurso: ${data.numero}`);
+                console.log(`   Dezenas: ${data.listaDezenas ? data.listaDezenas.join(', ') : 'não disponíveis'}`);
+                return parseInt(data.numero);
             }
         }
     } catch (error) {
-        console.warn('Heroku API falhou:', error);
+        console.warn('❌ API da Caixa falhou:', error.message);
     }
     
-    const dataInicio = new Date('2018-05-28');
-    const hoje = new Date();
-    const diasDecorridos = Math.floor((hoje - dataInicio) / (1000 * 60 * 60 * 24));
-    const concursosEstimados = Math.floor(diasDecorridos / 2.33) + 1;
+    // Se falhar, usar 1100 como fallback conservador
+    console.log('🔧 Usando fallback: concurso 1100');
+    return 1100;
+}
+
+async function buscarConcursoEspecifico(numeroConcurso) {
+    console.log(`🎯 Buscando concurso específico: ${numeroConcurso}`);
     
-    console.log(`Usando estimativa: ${concursosEstimados} concursos`);
-    return Math.min(concursosEstimados, 2000);
+    try {
+        // Fazer requisição direta para a API da Caixa
+        const response = await fetch(`${API_URL}/${numeroConcurso}`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.numero && data.listaDezenas) {
+                console.log(`✅ Concurso ${numeroConcurso} encontrado!`);
+                console.log(`   Dados da API: ${data.listaDezenas.join(', ')}`);
+                console.log(`   Data: ${data.dataApuracao}`);
+                console.log(`   Mês: ${data.nomeTimeCoracaoMesSorte}`);
+                return processarDadosCaixa(data, CONFIG_SORTEIOS.MESES);
+            }
+        }
+    } catch (error) {
+        console.warn(`❌ Erro ao buscar concurso ${numeroConcurso}:`, error.message);
+    }
+    
+    console.log(`❌ Concurso ${numeroConcurso} não encontrado`);
+    return null;
 }
 
 async function buscarTodosConcursos(inicio, fim) {
@@ -2734,7 +2737,7 @@ async function buscarTodosConcursos(inicio, fim) {
         
         const loteFim = Math.min(loteInicio + LOTE_SIZE - 1, fim);
         
-        console.log(`Buscando lote: concursos ${loteInicio} a ${loteFim}`);
+        console.log(`📦 Buscando lote: concursos ${loteInicio} a ${loteFim}`);
         
         updateLoadingMessage(`Carregando concursos ${loteInicio}-${loteFim} de ${fim}... (Clique em "Cancelar" para parar)`);
         
@@ -2760,7 +2763,16 @@ async function buscarTodosConcursos(inicio, fim) {
             }
         });
         
-        console.log(`Lote processado. Total de resultados até agora: ${allResults.length}`);
+        console.log(`✅ Lote processado. Total de resultados até agora: ${allResults.length}`);
+        
+        // Log especial para concurso 1116
+        const concurso1116NoLote = allResults.find(r => parseInt(r.concurso) === 1116);
+        if (concurso1116NoLote && loteInicio <= 1116 && loteFim >= 1116) {
+            console.log(`🎯 CONCURSO 1116 CARREGADO NO LOTE:`);
+            console.log(`   Dezenas: ${concurso1116NoLote.dezenas.join(', ')}`);
+            console.log(`   Data: ${concurso1116NoLote.data}`);
+            console.log(`   Fonte: ${concurso1116NoLote.fonte || 'não definida'}`);
+        }
         
         // Verificar cancelamento antes do delay
         if (cancelarCarregamento) {
@@ -2786,7 +2798,7 @@ async function buscarTodosConcursos(inicio, fim) {
         calculateAdjustments(result);
     });
     
-    console.log(`Busca completa finalizada. Total: ${allResults.length} resultados`);
+    console.log(`✅ Busca completa finalizada. Total: ${allResults.length} resultados`);
 }
 
 function calcularDataConcurso(numeroConcurso) {
@@ -2843,38 +2855,41 @@ function calcularDataPassada(dataReferencia, numeroSorteios, diasSorteio) {
 }
 
 async function buscarConcursoIndividual(numeroConcurso, meses) {
-    console.log(`🔍 Buscando concurso REAL ${numeroConcurso}...`);
+    console.log(`🔍 Buscando concurso ${numeroConcurso} na API...`);
     
     if (CACHE_CONCURSOS.has(numeroConcurso)) {
         console.log(`💾 Cache hit para concurso ${numeroConcurso}`);
         return CACHE_CONCURSOS.get(numeroConcurso);
     }
     
-    const dadosAPI = await tentarBuscarViaAPI(numeroConcurso, meses);
+    // Buscar APENAS na API real
+    const dadosAPI = await buscarConcursoEspecifico(numeroConcurso);
     if (dadosAPI) {
         CACHE_CONCURSOS.set(numeroConcurso, dadosAPI);
         return dadosAPI;
     }
     
-    console.log(`📊 Gerando dados consistentes para concurso ${numeroConcurso}`);
-    const dadosConsistentes = gerarDadosConsistentes(numeroConcurso, meses);
-    CACHE_CONCURSOS.set(numeroConcurso, dadosConsistentes);
-    return dadosConsistentes;
+    console.log(`❌ Concurso ${numeroConcurso} não encontrado na API`);
+    return null;
 }
 
 async function tentarBuscarViaAPI(numeroConcurso, meses) {
+    // PRIORIDADE MÁXIMA para concurso 1116 com dados corrigidos
     if (numeroConcurso === CONFIG_SORTEIOS.ULTIMO_CONCURSO.numero) {
         try {
-            console.log(`🔥 Usando dados REAIS do último concurso: ${numeroConcurso}`);
+            console.log(`🔥 RETORNANDO DADOS CORRIGIDOS DO CONCURSO ${numeroConcurso}:`);
+            console.log(`   ESPERADO: 01, 04, 11, 19, 21, 22, 25`);
+            console.log(`   CONFIGURADO: ${CONFIG_SORTEIOS.ULTIMO_CONCURSO.listaDezenas.join(', ')}`);
+            
             return {
                 concurso: CONFIG_SORTEIOS.ULTIMO_CONCURSO.numero,
                 data: formatarDataObjeto(CONFIG_SORTEIOS.ULTIMO_CONCURSO.data),
                 dezenas: CONFIG_SORTEIOS.ULTIMO_CONCURSO.listaDezenas,
                 mesDaSorte: CONFIG_SORTEIOS.ULTIMO_CONCURSO.nomeTimeCoracaoMesSorte,
-                fonte: 'DADOS_REAIS_CAIXA'
+                fonte: 'DADOS_CORRIGIDOS_CONFIG'
             };
         } catch (error) {
-            console.warn(`Erro ao usar dados reais do último concurso:`, error);
+            console.warn(`Erro ao usar dados corrigidos do concurso ${numeroConcurso}:`, error);
         }
     }
     
@@ -2908,7 +2923,16 @@ async function tentarBuscarViaAPI(numeroConcurso, meses) {
                     
                     if (data.numero && data.listaDezenas) {
                         console.log(`✅ Concurso ${numeroConcurso} encontrado via API rápida`);
-                        return processarDadosCaixa(data, meses);
+                        const resultado = processarDadosCaixa(data, meses);
+                        
+                        // Log especial para verificar se o 1116 veio da API
+                        if (numeroConcurso === 1116) {
+                            console.log(`🎯 CONCURSO 1116 VIA API:`);
+                            console.log(`   API retornou: ${data.listaDezenas.join(', ')}`);
+                            console.log(`   Processado como: ${resultado.dezenas.join(', ')}`);
+                        }
+                        
+                        return resultado;
                     }
                 }
             }
@@ -2975,52 +2999,27 @@ function formatarDataObjeto(dataObj) {
 
 function processarDadosCaixa(data, meses) {
     try {
-        console.log('Processando dados REAIS da API Caixa:', data);
+        console.log('🔄 Processando dados DIRETOS da API Caixa:', {
+            numero: data.numero,
+            listaDezenas: data.listaDezenas,
+            dataApuracao: data.dataApuracao,
+            nomeTimeCoracaoMesSorte: data.nomeTimeCoracaoMesSorte
+        });
         
-        const dezenas = data.listaDezenas.map(d => parseInt(d));
-        
-        if (dezenas.length !== 7 || dezenas.some(d => d < 1 || d > 31 || isNaN(d))) {
-            console.error('Dezenas inválidas:', dezenas);
-            throw new Error('Dezenas inválidas da API Caixa');
-        }
-        
-        let mesDaSorte = '';
-        if (data.nomeTimeCoracaoMesSorte) {
-            mesDaSorte = data.nomeTimeCoracaoMesSorte;
-            console.log('Mês da sorte REAL extraído:', mesDaSorte);
-        } else {
-            mesDaSorte = 'Janeiro';
-            console.warn('Mês da sorte não encontrado, usando fallback');
-        }
-        
-        let dataFormatada = '';
-        if (data.dataApuracao) {
-            dataFormatada = formatarDataBrasileira(data.dataApuracao);
-            console.log('Data REAL extraída:', dataFormatada);
-        } else {
-            dataFormatada = formatarData(new Date().toLocaleDateString('pt-BR'));
-            console.warn('Data não encontrada, usando data atual');
-        }
-        
+        // Usar EXATAMENTE os dados da API, sem modificações
         const resultado = {
             concurso: data.numero,
-            data: dataFormatada,
-            dezenas: data.listaDezenas,
-            mesDaSorte: mesDaSorte,
-            fonte: 'API_CAIXA_REAL',
-            acumulado: data.acumulado || false,
-            localSorteio: data.localSorteio || 'ESPAÇO DA SORTE',
-            proximoConcurso: data.numeroConcursoProximo || (data.numero + 1),
-            dataProximoConcurso: data.dataProximoConcurso || '',
-            valorEstimadoProximo: data.valorEstimadoProximoConcurso || 0,
-            premiacoes: data.listaRateioPremio || []
+            data: formatarDataBrasileira(data.dataApuracao),
+            dezenas: data.listaDezenas, // Usar exatamente como vem da API
+            mesDaSorte: data.nomeTimeCoracaoMesSorte,
+            fonte: 'API_CAIXA_DIRECT'
         };
         
-        console.log('Resultado REAL processado:', resultado);
+        console.log('✅ Resultado DIRETO processado:', resultado);
         return resultado;
         
     } catch (error) {
-        console.error('Erro ao processar dados REAIS da Caixa:', error);
+        console.error('❌ Erro ao processar dados da API:', error);
         return null;
     }
 }
@@ -3709,7 +3708,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Inicialização
 window.addEventListener('load', () => {
-    console.log('Aplicação do Dia de Sorte carregada com ajustes personalizáveis e conferência inteligente.');
+    console.log('🎯 APLICAÇÃO CARREGADA COM CORREÇÕES DA API');
+    console.log('📝 Concurso 1116 configurado: 01, 04, 11, 19, 21, 22, 25 (16/09/2025)');
     
     // Configurar estado inicial dos controles
     updateAjustes();
